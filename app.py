@@ -4,9 +4,9 @@ import os
 
 sys.path.append(os.path.dirname(__file__))
 
-from agent_graph import agent
+from agent_graph import agent, reset_model
 # 导入向量库连接对象，用于获取真实文档条数
-from retriever import collection
+from retriever import collection, reset_zhipu_client
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -20,6 +20,28 @@ st.caption("基于 LangGraph 的校园 RAG 问答系统（带多轮记忆 + 思�
 
 # ========== 侧边栏 ==========
 with st.sidebar:
+    st.header("🔑 API Key 设置")
+    api_key_input = st.text_input(
+        "请输入你的智谱 API Key",
+        type="password",
+        placeholder="sk-xxxxxx 或 zhipu key",
+        help="在 https://open.bigmodel.cn/ 注册获取，每个用户使用自己的 Key",
+        key="api_key_input"
+    )
+    
+    if api_key_input:
+        st.session_state.user_api_key = api_key_input.strip()
+        # 重置客户端，使用新的 API Key
+        reset_zhipu_client()
+        reset_model()
+        st.success("✅ API Key 已设置")
+    else:
+        st.warning("⚠️ 请先输入 API Key 才能使用问答功能")
+        if "user_api_key" in st.session_state:
+            del st.session_state.user_api_key
+    
+    st.divider()
+    
     st.header("⚙️ 控制面板")
     if st.button("🗑️ 清空聊天记录"):
         st.session_state.messages = []
@@ -29,7 +51,10 @@ with st.sidebar:
     st.divider()
     
     st.header("📊 系统状态")
-    st.success("✅ Agent 已就绪")
+    if "user_api_key" in st.session_state and st.session_state.user_api_key:
+        st.success("✅ Agent 已就绪")
+    else:
+        st.warning("⚠️ 请输入 API Key")
     # 显示真实知识库条数
     try:
         doc_count = collection.count()
@@ -59,7 +84,13 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # ========== 输入框 ==========
-if prompt := st.chat_input("问我关于校园的问题..."):
+has_api_key = "user_api_key" in st.session_state and st.session_state.user_api_key
+
+if prompt := st.chat_input("问我关于校园的问题...", disabled=not has_api_key):
+    if not has_api_key:
+        st.info("请先在左侧输入你的智谱 API Key")
+        st.stop()
+    
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
     

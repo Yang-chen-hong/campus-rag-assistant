@@ -15,19 +15,35 @@ EMBEDDING_MODEL = "embedding-2"  # 智谱 embedding 模型，1024 维
 
 
 def _get_api_key() -> str:
-    """获取 API Key：优先环境变量，其次 Streamlit Secrets"""
-    # 1. 从环境变量获取（本地开发）
+    """获取 API Key（优先级从高到低）：
+    1. Streamlit session_state（用户在页面输入的 Key）
+    2. 环境变量（本地开发）
+    3. Streamlit Secrets（云端部署默认 Key）
+    """
+    # 1. 从 Streamlit session_state 获取（用户自定义 Key）
+    try:
+        import streamlit as st
+        if hasattr(st, "session_state") and "user_api_key" in st.session_state:
+            key = st.session_state.user_api_key
+            if key and isinstance(key, str) and key.strip():
+                return key.strip()
+    except Exception:
+        pass
+
+    # 2. 从环境变量获取（本地开发）
     api_key = os.getenv("ZHIPU_API_KEY")
     if api_key:
         return api_key
-    # 2. 从 Streamlit Secrets 获取（云端部署）
+
+    # 3. 从 Streamlit Secrets 获取（云端部署默认 Key）
     try:
         import streamlit as st
         if hasattr(st, "secrets") and "ZHIPU_API_KEY" in st.secrets:
             return st.secrets["ZHIPU_API_KEY"]
     except Exception:
         pass
-    raise ValueError("未找到 ZHIPU_API_KEY，请在环境变量或 Streamlit Secrets 中配置")
+
+    raise ValueError("未找到 ZHIPU_API_KEY，请在侧边栏输入你的 API Key，或在环境变量/Streamlit Secrets 中配置")
 
 
 # 懒加载智谱客户端
@@ -40,6 +56,13 @@ def get_zhipu_client() -> ZhipuAI:
     if _zhipu_client is None:
         _zhipu_client = ZhipuAI(api_key=_get_api_key())
     return _zhipu_client
+
+
+def reset_zhipu_client():
+    """重置智谱客户端（切换 API Key 时调用）"""
+    global _zhipu_client
+    _zhipu_client = None
+
 
 # 初始化向量库客户端，指定余弦距离空间
 client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
