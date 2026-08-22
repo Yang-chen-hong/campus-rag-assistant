@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+agent_env/
+venv/
+env/
+*.egg-info/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Models (too large for GitHub)
+models/
+
+# Raw data (too large for GitHub)
+rag_output/*.jsonl
+!rag_output/.gitkeep
+
+# ChromaDB backups
+db_backup/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Logs
+*.log
+logs/
+
+# Temporary
+*.tmp
+*.bak
