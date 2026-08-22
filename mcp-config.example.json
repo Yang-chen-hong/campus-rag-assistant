@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "hunnu-campus-assistant": {
+      "command": "python",
+      "args": [
+        "C:\\Users\\杨陈宏\\OneDrive\\智能体开发课程\\__pycache__\\mcp_server.py"
+      ],
+      "env": {
+        "ZHIPU_API_KEY": "你的智谱API_KEY"
+      }
+    }
+  }
+}
