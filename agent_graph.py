@@ -11,13 +11,36 @@ from retriever import search_test
 from skills_tools import query_scholarship, query_discipline, get_policy_time
 
 load_dotenv()
-api_key = os.getenv("ZHIPU_API_KEY")
 
-model = ChatZhipuAI(
-    model="glm-4-flash",
-    api_key=api_key,
-    temperature=0.1
-)
+
+def _get_api_key() -> str:
+    """获取 API Key：优先环境变量，其次 Streamlit Secrets"""
+    api_key = os.getenv("ZHIPU_API_KEY")
+    if api_key:
+        return api_key
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "ZHIPU_API_KEY" in st.secrets:
+            return st.secrets["ZHIPU_API_KEY"]
+    except Exception:
+        pass
+    raise ValueError("未找到 ZHIPU_API_KEY，请在环境变量或 Streamlit Secrets 中配置")
+
+
+# 懒加载模型
+_model = None
+
+
+def get_model() -> ChatZhipuAI:
+    """获取智谱大模型客户端（懒加载）"""
+    global _model
+    if _model is None:
+        _model = ChatZhipuAI(
+            model="glm-4-flash",
+            api_key=_get_api_key(),
+            temperature=0.1
+        )
+    return _model
 
 class AgentState(TypedDict):
     question: str
@@ -48,7 +71,7 @@ def classify_intent(state: AgentState):
     用户最新问题：{state["question"]}
     判断属于哪个类别，只输出一个词：policy / major / news / chat
     """
-    response = model.invoke(prompt)
+    response = get_model().invoke(prompt)
     intent = response.content.strip().lower()
     thinking.append(f"   → 判断为：{intent}")
     
@@ -100,7 +123,7 @@ def retrieve_news(state: AgentState):
 def direct_answer(state: AgentState):
     thinking = state.get("thinking_steps", [])
     thinking.append("💬 直接回答（无需检索）")
-    response = model.invoke(f"请友好地回答用户：{state['question']}")
+    response = get_model().invoke(f"请友好地回答用户：{state['question']}")
     thinking.append("   → 回答已生成")
     return {
         "answer": response.content,
@@ -168,7 +191,7 @@ def generate_answer(state: AgentState):
     5. 不要在没有理解指代的情况下，做出泛泛的回答
     """    # ===================================================
     
-    response = model.invoke(prompt)
+    response = get_model().invoke(prompt)
     thinking.append("   → 回答已生成")
     
     return {

@@ -13,8 +13,33 @@ COLLECTION_NAME = "hunnu_school_knowledge"
 SIM_THRESHOLD = 0.0  # 低于该相似度直接过滤
 EMBEDDING_MODEL = "embedding-2"  # 智谱 embedding 模型，1024 维
 
-# 初始化智谱客户端
-zhipu_client = ZhipuAI(api_key=os.getenv("ZHIPU_API_KEY"))
+
+def _get_api_key() -> str:
+    """获取 API Key：优先环境变量，其次 Streamlit Secrets"""
+    # 1. 从环境变量获取（本地开发）
+    api_key = os.getenv("ZHIPU_API_KEY")
+    if api_key:
+        return api_key
+    # 2. 从 Streamlit Secrets 获取（云端部署）
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "ZHIPU_API_KEY" in st.secrets:
+            return st.secrets["ZHIPU_API_KEY"]
+    except Exception:
+        pass
+    raise ValueError("未找到 ZHIPU_API_KEY，请在环境变量或 Streamlit Secrets 中配置")
+
+
+# 懒加载智谱客户端
+_zhipu_client = None
+
+
+def get_zhipu_client() -> ZhipuAI:
+    """获取智谱客户端（懒加载）"""
+    global _zhipu_client
+    if _zhipu_client is None:
+        _zhipu_client = ZhipuAI(api_key=_get_api_key())
+    return _zhipu_client
 
 # 初始化向量库客户端，指定余弦距离空间
 client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
@@ -27,7 +52,8 @@ collection = client.get_or_create_collection(
 
 def get_embedding(text: str) -> list:
     """调用智谱 embedding API 获取向量"""
-    response = zhipu_client.embeddings.create(
+    client = get_zhipu_client()
+    response = client.embeddings.create(
         model=EMBEDDING_MODEL,
         input=text
     )
