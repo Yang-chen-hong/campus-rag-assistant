@@ -197,7 +197,7 @@ async def handle_call_tool(params: CallToolRequest, session) -> CallToolResult:
 
 # ========== 具体工具实现 ==========
 async def _tool_campus_rag_query(args: dict) -> CallToolResult:
-    """完整 RAG 问答"""
+    """完整 RAG 问答（v2.0 ReAct Agent）"""
     question = args.get("question", "")
     if not question:
         return CallToolResult(
@@ -205,16 +205,12 @@ async def _tool_campus_rag_query(args: dict) -> CallToolResult:
             isError=True
         )
 
-    from agent_graph import agent
-    result = agent.invoke({
-        "question": question,
-        "chat_history": [],
-        "thinking_steps": []
-    })
+    from agent_graph import agent_invoke
+    result = agent_invoke(question, chat_history=[])
 
     answer = result.get("answer", "抱歉，我没有找到答案。")
     thinking_steps = result.get("thinking_steps", [])
-    retrieved_docs = result.get("retrieved_docs", [])
+    tool_calls = result.get("tool_calls", [])
     intent = result.get("intent", "chat")
 
     # 构造结构化输出
@@ -223,15 +219,16 @@ async def _tool_campus_rag_query(args: dict) -> CallToolResult:
         f"\n\n## 问题分类\n\n{intent}",
     ]
 
+    if tool_calls:
+        tools_text = "\n".join(
+            f"- **{tc['tool']}**：{tc.get('args', {})}"
+            for tc in tool_calls
+        )
+        output_parts.append(f"\n\n## 调用的工具\n\n{tools_text}")
+
     if thinking_steps:
         steps_text = "\n".join(f"- {step}" for step in thinking_steps)
         output_parts.append(f"\n\n## 思考过程\n\n{steps_text}")
-
-    if retrieved_docs:
-        docs_text = "\n\n".join(
-            f"### 文档 {i+1}\n{doc}" for i, doc in enumerate(retrieved_docs)
-        )
-        output_parts.append(f"\n\n## 参考资料\n\n{docs_text}")
 
     full_output = "".join(output_parts)
 
