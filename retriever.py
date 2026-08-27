@@ -116,34 +116,53 @@ def search_test(query: str, top_k: int = None, chat_history: list = None,
     query_vec = get_embedding(search_query)
     result = collection.query(
         query_embeddings=[query_vec],
-        n_results=top_k * 2,
+        n_results=max(top_k * 12, 50),  # 多召回候选，确保关键词重排有足够素材
         include=["documents", "metadatas", "distances"]
     )
     docs = result["documents"][0]
     metas = result["metadatas"][0]
     dists = result["distances"][0]
 
-    # Step 3: 关键词加分
-    stopwords = set("的 了 和 是 在 有 我 你 他 这 那 什么 怎么 如何 请问 吗 呢 啊 吧 要 有哪些".split())
+    # Step 3: 关键词加分（增强版：标题匹配+内容匹配+短语匹配）
+    stopwords = set("的 了 和 是 在 有 我 你 他 这 那 什么 怎么 如何 请问 吗 呢 啊 吧 要 有哪些 一下 可以 多少".split())
     words = re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', search_query)
     keywords = [w for w in words if w not in stopwords and len(w) > 1]
 
     results = []
     for idx in range(len(docs)):
         cos_sim = 1 - dists[idx]
+        title = metas[idx].get("title", "")
+        content_lower = docs[idx]
 
-        # 关键词加分
+        # 1. 标题关键词匹配（权重高，因为标题代表文档主题）
+        title_bonus = 0
+        if keywords and title:
+            title_match_count = sum(1 for kw in keywords if kw in title)
+            title_bonus = title_match_count * 0.20  # 每个关键词加0.20
+            if title_match_count == len(keywords):
+                title_bonus += 0.15  # 全部命中额外加0.15
+            if title_match_count >= 2:
+                title_bonus += 0.1  # 多关键词命中再加0.1
+
+        # 2. 内容关键词匹配
         kw_bonus = 0
         if keywords:
-            match_count = sum(1 for kw in keywords if kw in docs[idx])
-            kw_bonus = match_count * 0.05
+            match_count = sum(1 for kw in keywords if kw in content_lower)
+            kw_bonus = match_count * 0.04
 
-        final_score = cos_sim + kw_bonus
+        # 3. 整句/短语匹配（当查询短语出现在内容中时加分）
+        phrase_bonus = 0
+        if len(search_query) >= 3 and search_query in content_lower:
+            phrase_bonus = 0.08
+        if title and len(search_query) >= 3 and search_query in title:
+            phrase_bonus += 0.15
+
+        final_score = cos_sim + title_bonus + kw_bonus + phrase_bonus
 
         if final_score >= SIM_THRESHOLD:
             results.append({
                 "content": docs[idx],
-                "title": metas[idx].get("title", "未知来源"),
+                "title": title,
                 "score": round(final_score, 4),
             })
 
