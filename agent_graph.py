@@ -1,17 +1,19 @@
 """
-校园智能 Agent v3.0
+校园智能 Agent v4.0
 ======================
 核心改进：
-  1. Skills工具真正查数据库（不再用硬编码假数据）
-  2. 更好的系统提示词（引导模型给出详细回答）
-  3. 工具结果格式优化（给模型更充足的上下文）
-  4. 多步推理（先检索→再分析→再生成回答）
+  1. 统一 Skill 系统：从 skills_tools.py 加载，一处定义三处复用
+  2. 10个业务 Skill 全部查数据库（不再硬编码）
+  3. 更好的系统提示词（引导模型给出详细回答）
+  4. 工具结果格式优化（给模型更充足的上下文）
+  5. 多步推理（先检索→再分析→再生成回答）
 """
 
 import os
 import json
 from dotenv import load_dotenv
 from zhipu_api import chat_completions, _get_api_key
+from skills_tools import get_openai_tools, execute_skill
 from typing import List, Dict, Any, Generator
 
 load_dotenv()
@@ -47,56 +49,8 @@ def reset_model():
     pass
 
 
-# ========== 工具定义 ==========
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_knowledge_base",
-            "description": "搜索校园知识库。当用户询问奖学金、考试规定、处分、专业、宿舍、图书馆、食堂、学籍、毕业等任何校园相关问题时，必须调用此工具获取具体资料后再回答。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "搜索关键词，如：奖学金评定条件、考试作弊处分、挂科补考、专业介绍"
-                    }
-                },
-                "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_scholarship_eligibility",
-            "description": "根据学生的年级、绩点、处分情况，判断符合哪类奖学金申请条件。需要用户提供年级、绩点和处分次数。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "grade": {"type": "string", "description": "年级，如：大一、大二、大三、大四"},
-                    "gpa": {"type": "number", "description": "绩点，如3.5（满分4.0）"},
-                    "punishment_count": {"type": "number", "description": "处分次数，0表示无处分"}
-                },
-                "required": ["grade", "gpa", "punishment_count"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_discipline_rule",
-            "description": "查询学校处分相关规定。包括：挂科、作弊、旷课、考试纪律、处分等级等。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "rule_type": {"type": "string", "description": "规则类型：挂科、作弊、旷课、考试、处分"}
-                },
-                "required": ["rule_type"]
-            }
-        }
-    },
-]
+# ========== 工具定义（从 skills_tools.py 统一加载，一处定义三处复用） ==========
+TOOLS = get_openai_tools()
 
 
 # ========== 系统提示词 ==========
@@ -121,114 +75,22 @@ SYSTEM_PROMPT = """你是湖南师范大学校园智能助手，专门帮助学�
 
 ## 工具使用
 - `search_knowledge_base`：搜索校园知识库（最常用，大多数问题先用这个）
+- `campus_faq_match`：校园高频问题匹配（常见问题快速匹配）
 - `check_scholarship_eligibility`：判断奖学金资格（需要年级、绩点、处分信息）
-- `get_discipline_rule`：查询处分规定
+- `query_discipline_rules`：查询处分规定（挂科、作弊、旷课等）
+- `get_college_info`：查询学院和专业信息
+- `calculate_gpa`：GPA计算器（输入各科成绩和学分）
+- `check_graduation_requirements`：检查毕业条件
+- `get_campus_contacts`：查校园常用电话和办公地点
+- `check_tuition_fees`：查询学费标准
+- `get_dormitory_info`：查询宿舍信息
 - 可以多次调用工具，换不同关键词搜索
 - 问题不涉及具体信息时（如"你好"），不用调用工具"""
 
 
-# ========== 工具执行 ==========
+# ========== 工具执行（统一委托给 skills_tools.py） ==========
 def execute_tool(tool_name: str, arguments: dict, chat_history: list = None) -> str:
-    try:
-        if tool_name == "search_knowledge_base":
-            return _tool_search(arguments, chat_history)
-        elif tool_name == "check_scholarship_eligibility":
-            return _tool_scholarship(arguments)
-        elif tool_name == "get_discipline_rule":
-            return _tool_discipline(arguments)
-        else:
-            return f"未知工具：{tool_name}"
-    except Exception as e:
-        return f"工具执行出错：{e}"
-
-
-def _tool_search(args: dict, chat_history: list = None) -> str:
-    """检索知识库——返回完整文档内容，让模型有足够上下文"""
-    from retriever import search_test
-    query = args.get("query", "")
-    if not query:
-        return "请提供搜索关键词"
-
-    results = search_test(query, top_k=8, chat_history=chat_history)
-
-    if not results:
-        return "未找到相关资料。建议换个关键词再试试，比如：奖学金评定条件、考试作弊处分、挂科补考规定。"
-
-    output_parts = [f"检索到 {len(results)} 条相关资料：\n"]
-    for i, r in enumerate(results):
-        output_parts.append(f"\n【来源{i+1}】《{r['title']}》相关度:{r['score']}\n")
-        output_parts.append(f"{r['content']}\n")
-
-    return "".join(output_parts)
-
-
-def _tool_scholarship(args: dict) -> str:
-    """奖学金资格判断——结合数据库检索"""
-    grade = args.get("grade", "")
-    gpa = float(args.get("gpa", 0))
-    punishment_count = int(args.get("punishment_count", 0))
-
-    # 先从数据库获取奖学金规定
-    from retriever import search_test
-    rules = search_test("奖学金评定条件 绩点要求", top_k=3, use_rewrite=False)
-
-    rules_text = ""
-    for r in rules:
-        rules_text += r["content"] + "\n"
-
-    # 结合规则判断
-    result = f"根据奖学金评定办法：\n\n"
-    result += f"学生情况：{grade}，绩点{gpa}，处分{punishment_count}次\n\n"
-
-    if punishment_count > 0:
-        result += "❌ 不符合奖学金申请条件。\n"
-        result += "原因：有处分记录。根据规定，受处分期间取消评奖评优资格。\n\n"
-    elif gpa >= 3.8:
-        result += "✅ 可申请国家奖学金（要求：绩点≥3.8，排名前5%）\n"
-    elif gpa >= 3.5:
-        result += "✅ 可申请一等奖学金（要求：绩点≥3.5，无挂科，无处分）\n"
-    elif gpa >= 3.0:
-        result += "✅ 可申请二等奖学金（要求：绩点≥3.0，挂科≤1门，无处分）\n"
-    elif gpa >= 2.5:
-        result += "✅ 可申请三等奖学金（要求：绩点≥2.5，挂科≤2门，无处分）\n"
-    else:
-        result += "⚠️ 绩点较低，建议申请单项奖学金（在某一方面表现突出即可）\n"
-
-    result += "\n奖学金等级和金额：\n"
-    result += "- 国家奖学金：8000元/年\n"
-    result += "- 国家励志奖学金：5000元/年\n"
-    result += "- 校级一等奖学金：3000元/年\n"
-    result += "- 校级二等奖学金：2000元/年\n"
-    result += "- 校级三等奖学金：1000元/年\n"
-    result += "- 单项奖学金：500元/年\n"
-
-    return result
-
-
-def _tool_discipline(args: dict) -> str:
-    """处分规定查询——从数据库检索"""
-    rule_type = args.get("rule_type", "")
-
-    from retriever import search_test
-    results = search_test(f"{rule_type} 处分规定", top_k=5, use_rewrite=False)
-
-    if results:
-        output_parts = [f"关于「{rule_type}」的相关规定：\n"]
-        for i, r in enumerate(results):
-            output_parts.append(f"\n【来源{i+1}】《{r['title']}》\n{r['content']}\n")
-        return "".join(output_parts)
-
-    # 数据库没有就用默认规则
-    rules = {
-        "挂科": "📚 挂科后可申请补考，补考通过按60分计入。补考不过须重修。累计挂科超3门给学业预警，超8门编入下一年级。",
-        "作弊": "🚫 考试作弊给记过及以上处分，成绩记零分不得补考，取消学位授予资格，记入诚信档案。",
-        "旷课": "📋 旷课20-39学时警告，40-59学时严重警告，60-79学时记过，80学时以上留校察看。",
-        "处分": "⚠️ 处分分五级：警告(6月)、严重警告(8月)、记过(10月)、留校察看(12月)、开除学籍。处分期间取消评奖评优资格。",
-    }
-    for key, value in rules.items():
-        if key in rule_type or rule_type in key:
-            return value
-    return f"未找到关于「{rule_type}」的规定。可查询：挂科、作弊、旷课、考试、处分"
+    return execute_skill(tool_name, arguments, chat_history)
 
 
 # ========== 记忆管理 ==========
