@@ -15,7 +15,7 @@
 import os
 import json
 from dotenv import load_dotenv
-from zhipuai import ZhipuAI
+from zhipu_api import chat_completions, _get_api_key
 from typing import List, Dict, Any, Optional, Generator
 
 load_dotenv()
@@ -28,51 +28,15 @@ SUMMARY_THRESHOLD = 12          # 超过多少轮触发总结压缩
 TEMPERATURE = 0.1
 
 
-def _get_api_key() -> str:
-    """获取 API Key（优先级从高到低）：
-    1. Streamlit session_state（用户在页面输入的 Key）
-    2. 环境变量（本地开发）
-    3. Streamlit Secrets（云端部署默认 Key）
-    """
-    try:
-        import streamlit as st
-        if hasattr(st, "session_state") and "user_api_key" in st.session_state:
-            key = st.session_state.user_api_key
-            if key and isinstance(key, str) and key.strip():
-                return key.strip()
-    except Exception:
-        pass
-
-    api_key = os.getenv("ZHIPU_API_KEY")
-    if api_key:
-        return api_key
-
-    try:
-        import streamlit as st
-        if hasattr(st, "secrets") and "ZHIPU_API_KEY" in st.secrets:
-            return st.secrets["ZHIPU_API_KEY"]
-    except Exception:
-        pass
-
-    raise ValueError("未找到 ZHIPU_API_KEY，请在侧边栏输入你的 API Key，或在环境变量/Streamlit Secrets 中配置")
-
-
 # ========== 客户端管理 ==========
-_client = None
-
-
-def get_client() -> ZhipuAI:
-    """获取智谱客户端（懒加载）"""
-    global _client
-    if _client is None:
-        _client = ZhipuAI(api_key=_get_api_key())
-    return _client
+def get_client():
+    """兼容旧接口 - 返回 None（已改用 zhipu_api 模块）"""
+    return None
 
 
 def reset_client():
     """重置客户端（切换 API Key 时调用）"""
-    global _client
-    _client = None
+    pass
 
 
 # 兼容旧接口
@@ -80,22 +44,21 @@ def get_model():
     """兼容旧版调用（返回客户端的 invoke 包装）"""
     class ModelWrapper:
         def invoke(self, prompt):
-            client = get_client()
-            resp = client.chat.completions.create(
-                model=MODEL_NAME,
+            resp = chat_completions(
                 messages=[{"role": "user", "content": prompt}],
+                model=MODEL_NAME,
                 temperature=TEMPERATURE,
             )
 
             class Resp:
                 def __init__(self, content):
                     self.content = content
-            return Resp(resp.choices[0].message.content)
+            return Resp(resp["choices"][0]["message"]["content"])
     return ModelWrapper()
 
 
 def reset_model():
-    reset_client()
+    pass
 
 
 # ========== 工具定义 ==========
@@ -338,7 +301,6 @@ def summarize_history(chat_history: List[Dict]) -> List[Dict]:
         role = "用户" if msg.get("role") == "user" else "助手"
         history_text += f"{role}：{msg.get('content', '')[:200]}\n"
 
-    client = get_client()
     prompt = f"""请用简洁的语言总结以下对话历史的核心内容，保留关键信息点。
 重点保留：用户问了什么、助手回答了什么、有哪些关键信息被确认。
 
@@ -348,13 +310,13 @@ def summarize_history(chat_history: List[Dict]) -> List[Dict]:
 总结（100字以内）："""
 
     try:
-        resp = client.chat.completions.create(
-            model=MODEL_NAME,
+        resp = chat_completions(
             messages=[{"role": "user", "content": prompt}],
+            model=MODEL_NAME,
             temperature=0.1,
             max_tokens=150
         )
-        summary = resp.choices[0].message.content.strip()
+        summary = resp["choices"][0]["message"]["content"].strip()
         # 用一条 system 消息承载总结
         summarized = [{"role": "system", "content": f"【历史对话总结】{summary}"}]
         return summarized + recent_history
@@ -406,7 +368,6 @@ def agent_invoke(question: str, chat_history: List[Dict] = None,
     thinking_steps.append("🤔 正在分析问题...")
 
     # 3. ReAct 循环
-    client = get_client()
     iteration = 0
 
     while iteration < MAX_ITERATIONS:
@@ -414,9 +375,9 @@ def agent_invoke(question: str, chat_history: List[Dict] = None,
         thinking_steps.append(f"🔄 第 {iteration} 轮思考...")
 
         try:
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
+            response = chat_completions(
                 messages=messages,
+                model=MODEL_NAME,
                 tools=TOOLS,
                 temperature=TEMPERATURE,
             )
@@ -430,14 +391,14 @@ def agent_invoke(question: str, chat_history: List[Dict] = None,
                 "intent": "error",
             }
 
-        message = response.choices[0].message
-        messages.append(message.model_dump(exclude_none=True))
+        message = response["choices"][0]["message"]
+        messages.append(message)
 
         # 检查是否有工具调用
-        if not message.tool_calls:
+        if not message.get("tool_calls"):
             # 没有工具调用 = 生成最终回答
             thinking_steps.append("   ✅ 生成最终回答")
-            answer = message.content or "抱歉，我无法回答这个问题。"
+            answer = message.get("content") or "抱歉，我无法回答这个问题。"
             return {
                 "answer": answer,
                 "thinking_steps": thinking_steps,
@@ -447,11 +408,11 @@ def agent_invoke(question: str, chat_history: List[Dict] = None,
             }
 
         # 有工具调用，逐个执行
-        for tool_call in message.tool_calls:
-            tool_name = tool_call.function.name
+        for tool_call in message["tool_calls"]:
+            tool_name = tool_call["function"]["name"]
             try:
-                args = json.loads(tool_call.function.arguments)
-            except json.JSONDecodeError:
+                args = json.loads(tool_call["function"]["arguments"])
+            except (json.JSONDecodeError, KeyError):
                 args = {}
 
             thinking_steps.append(f"   🔧 调用工具：{tool_name}")
@@ -484,7 +445,7 @@ def agent_invoke(question: str, chat_history: List[Dict] = None,
             # 将工具结果加入消息
             messages.append({
                 "role": "tool",
-                "tool_call_id": tool_call.id,
+                "tool_call_id": tool_call["id"],
                 "content": tool_result,
             })
 
@@ -493,12 +454,12 @@ def agent_invoke(question: str, chat_history: List[Dict] = None,
     messages.append({"role": "user", "content": "请根据已有的信息直接回答我的问题，不要再调用工具了。"})
 
     try:
-        final_resp = client.chat.completions.create(
-            model=MODEL_NAME,
+        final_resp = chat_completions(
             messages=messages,
+            model=MODEL_NAME,
             temperature=TEMPERATURE,
         )
-        answer = final_resp.choices[0].message.content or "抱歉，我无法回答这个问题。"
+        answer = final_resp["choices"][0]["message"]["content"] or "抱歉，我无法回答这个问题。"
     except Exception as e:
         answer = f"抱歉，生成回答时出错：{e}"
 

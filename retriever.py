@@ -15,7 +15,7 @@ import chromadb
 import os
 import re
 from dotenv import load_dotenv
-from zhipuai import ZhipuAI
+from zhipu_api import create_embedding, chat_completions, _get_api_key
 
 load_dotenv()
 
@@ -23,56 +23,19 @@ load_dotenv()
 CHROMA_DB_PATH = "./db"
 COLLECTION_NAME = "hunnu_school_knowledge"
 EMBEDDING_MODEL = "embedding-2"    # 智谱 embedding 模型，1024 维
-RERANK_MODEL = "glm-4-rerank"        # 智谱重排序模型
 SIM_THRESHOLD = 0.4                # 相似度阈值（余弦相似度，低于此值过滤）
 HYBRID_TOP_K_MULTIPLIER = 3        # 混合检索候选放大倍数（先召回多一些再重排）
 DEFAULT_TOP_K = 5                  # 默认返回条数
 
 
-def _get_api_key() -> str:
-    """获取 API Key（优先级从高到低）：
-    1. Streamlit session_state（用户在页面输入的 Key）
-    2. 环境变量（本地开发）
-    3. Streamlit Secrets（云端部署默认 Key）
-    """
-    # 1. 从 Streamlit session_state 获取（用户自定义 Key）
-    try:
-        import streamlit as st
-        if hasattr(st, "session_state") and "user_api_key" in st.session_state:
-            key = st.session_state.user_api_key
-            if key and isinstance(key, str) and key.strip():
-                return key.strip()
-    except Exception:
-        pass
-
-    # 2. 从环境变量获取（本地开发）
-    api_key = os.getenv("ZHIPU_API_KEY")
-    if api_key:
-        return api_key
-
-    # 3. 从 Streamlit Secrets 获取（云端部署默认 Key）
-    try:
-        import streamlit as st
-        if hasattr(st, "secrets") and "ZHIPU_API_KEY" in st.secrets:
-            return st.secrets["ZHIPU_API_KEY"]
-    except Exception:
-        pass
-
-    raise ValueError("未找到 ZHIPU_API_KEY，请在侧边栏输入你的 API Key，或在环境变量/Streamlit Secrets 中配置")
-
-
 # -------------------------- 客户端管理 --------------------------
-_zhipu_client = None
 _chroma_client = None
 _collection = None
 
 
-def get_zhipu_client() -> ZhipuAI:
-    """获取智谱客户端（懒加载）"""
-    global _zhipu_client
-    if _zhipu_client is None:
-        _zhipu_client = ZhipuAI(api_key=_get_api_key())
-    return _zhipu_client
+def get_zhipu_client():
+    """兼容旧接口 - 直接返回 None（已改用 zhipu_api 模块）"""
+    return None
 
 
 def get_chroma_collection():
@@ -89,26 +52,19 @@ def get_chroma_collection():
 
 def reset_clients():
     """重置所有客户端（切换 API Key 时调用）"""
-    global _zhipu_client, _chroma_client, _collection
-    _zhipu_client = None
+    global _chroma_client, _collection
     _chroma_client = None
     _collection = None
 
 
 # 兼容旧接口
-collection = property(get_chroma_collection)
 reset_zhipu_client = reset_clients
 
 
 # -------------------------- Embedding --------------------------
 def get_embedding(text: str) -> list:
     """调用智谱 embedding API 获取向量"""
-    client = get_zhipu_client()
-    response = client.embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=text
-    )
-    return response.data[0].embedding
+    return create_embedding(text, model=EMBEDDING_MODEL)
 
 
 def get_embeddings_batch(texts: list) -> list:
@@ -160,13 +116,13 @@ def rewrite_query(query: str, chat_history: list = None) -> str:
 改写后的查询："""
 
     try:
-        response = client.chat.completions.create(
-            model="glm-4-flash",
+        response = chat_completions(
             messages=[{"role": "user", "content": prompt}],
+            model="glm-4-flash",
             temperature=0.1,
             max_tokens=100
         )
-        rewritten = response.choices[0].message.content.strip()
+        rewritten = response["choices"][0]["message"]["content"].strip()
         # 简单清洗
         rewritten = rewritten.strip('"').strip("'").strip()
         return rewritten if rewritten else query
@@ -261,79 +217,64 @@ def vector_search(query: str, top_k: int = 10) -> list:
 # -------------------------- 重排序 --------------------------
 def rerank(query: str, candidates: list, top_k: int = 5) -> list:
     """
-    使用智谱 Rerank 模型对候选文档重新排序。
-    显著提升检索准确率，尤其是在候选较多时效果明显。
+    使用大模型对候选文档重新排序。
+    用 glm-4-flash 对每个候选打分（0-10分），按分数排序。
     """
     if not candidates:
         return []
     if len(candidates) <= top_k:
-        # 候选不够多，直接返回
         return candidates
 
-    client = get_zhipu_client()
-    documents = [c["content"] for c in candidates]
+    # 用大模型一次性对所有候选打分
+    docs_text = ""
+    for i, c in enumerate(candidates):
+        docs_text += f"\n[{i+1}] {c['content'][:200]}\n"
+
+    prompt = f"""请对以下文档与查询的相关性打分（0-10分，10分最相关）。
+只返回每篇文档的编号和分数，格式：编号:分数，每行一篇。
+
+查询：{query}
+
+文档列表：
+{docs_text}
+
+打分结果："""
 
     try:
-        response = client.chat.completions.create(
-            model=RERANK_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"请对以下文档与查询的相关性进行排序，返回从高到低的文档索引。\n查询：{query}"
-                        }
-                    ]
-                }
-            ],
-            tools=[
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "rerank",
-                        "description": "对文档列表按与查询的相关性排序",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "documents": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "待排序的文档列表"
-                                },
-                                "query": {"type": "string", "description": "查询语句"},
-                                "top_n": {"type": "number", "description": "返回前N条"}
-                            },
-                            "required": ["documents", "query"]
-                        }
-                    }
-                }
-            ],
-            tool_choice={"type": "function", "function": {"name": "rerank"}}
+        response = chat_completions(
+            messages=[{"role": "user", "content": prompt}],
+            model="glm-4-flash",
+            temperature=0.1,
+            max_tokens=200
         )
+        result_text = response["choices"][0]["message"]["content"].strip()
 
-        # 解析 rerank 结果
-        tool_calls = response.choices[0].message.tool_calls
-        if tool_calls and len(tool_calls) > 0:
-            import json
-            args = json.loads(tool_calls[0].function.arguments)
-            ranked_docs = args.get("results", [])
-            # 按照返回的顺序重新排列 candidates
-            result_map = {c["content"]: c for c in candidates}
-            reranked = []
-            for item in ranked_docs:
-                doc_text = item.get("text", "")
-                if doc_text in result_map:
-                    entry = result_map[doc_text].copy()
-                    entry["score"] = item.get("relevance_score", entry.get("score", 0))
-                    entry["_source"] = entry.get("_source", "rerank")
-                    reranked.append(entry)
-            # 补全没排到的
-            seen = set(r["content"] for r in reranked)
-            for c in candidates:
-                if c["content"] not in seen:
-                    reranked.append(c)
-            return reranked[:top_k]
+        # 解析打分结果
+        import re
+        scores = {}
+        for line in result_text.split("\n"):
+            match = re.match(r'(\d+)\s*[:：]\s*(\d+\.?\d*)', line.strip())
+            if match:
+                idx = int(match.group(1)) - 1
+                score = float(match.group(2))
+                if 0 <= idx < len(candidates):
+                    scores[idx] = score
+
+        # 按打分排序
+        ranked = []
+        for idx in sorted(scores.keys(), key=lambda k: scores[k], reverse=True):
+            entry = candidates[idx].copy()
+            entry["score"] = scores[idx] / 10.0  # 归一化到 0-1
+            entry["_source"] = "rerank"
+            ranked.append(entry)
+
+        # 补全没打分的
+        seen = set(r["content"] for r in ranked)
+        for c in candidates:
+            if c["content"] not in seen:
+                ranked.append(c)
+
+        return ranked[:top_k]
     except Exception as e:
         print(f"[重排序失败，使用原始排序] {e}")
 
