@@ -1,25 +1,25 @@
 """
-湖南师范大学校园智能助手 - Streamlit 前端 v2.0
+湖南师范大学校园智能助手 - Streamlit 前端 v3.0
 ==================================================
-升级内容：
-  1. 流式输出（打字机效果）
-  2. 工具调用过程可视化（思考面板）
-  3. 引用来源卡片（可展开查看原文）
-  4. 快捷提问按钮
-  5. 更专业的 UI 设计
-  6. 错误提示优化
+核心设计：
+  1. 深色/明亮主题切换（运行时动态切换）
+  2. 左侧数据面板（数据库统计、文档分类、Skill列表）
+  3. 流式输出 + 思考过程可视化
+  4. 引用来源卡片 + 快捷提问
 """
 
 import streamlit as st
 import sys
 import os
 import time
+import json
 
 sys.path.append(os.path.dirname(__file__))
 
 from agent_graph import agent_invoke, reset_client
 from retriever import get_collection_count, reset_clients
-from init_db import init_database
+from init_db import init_database, ALL_DOCS
+from skills_tools import registry
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -35,145 +35,483 @@ try:
 except Exception:
     pass
 
-# 自定义 CSS
-st.markdown("""
+# ========== 主题系统 ==========
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
+
+DARK_CSS = """
 <style>
-    /* 主色调 */
-    :root {
-        --primary: #1e88e5;
-        --primary-light: #e3f2fd;
-    }
+/* ========== 深色主题 ========== */
+:root {
+    --bg-primary: #0f1117;
+    --bg-secondary: #1a1d29;
+    --bg-card: #1e2233;
+    --bg-hover: #252a3d;
+    --text-primary: #e4e6eb;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --accent: #5b9fff;
+    --accent-light: rgba(91, 159, 255, 0.15);
+    --accent-glow: rgba(91, 159, 255, 0.4);
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --border: #2d3142;
+    --border-light: #3d4154;
+    --shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
 
-    /* 隐藏 Streamlit 默认菜单和页脚 */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+.stApp {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
 
-    /* 标题样式 */
-    .main-title {
-        font-size: 1.8rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #1e88e5, #42a5f5);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.2rem;
-    }
+#MainMenu, footer {visibility: hidden;}
 
-    /* 聊天气泡 */
-    .chat-message {
-        padding: 1rem;
-        border-radius: 12px;
-        margin-bottom: 0.8rem;
-        line-height: 1.6;
-    }
-    .user-message {
-        background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-        border-left: 4px solid #1e88e5;
-    }
-    .assistant-message {
-        background: #fafafa;
-        border-left: 4px solid #66bb6a;
-    }
+/* 侧边栏 */
+section[data-testid="stSidebar"] {
+    background: var(--bg-secondary) !important;
+    border-right: 1px solid var(--border);
+}
 
-    /* 工具调用指示器 */
-    .tool-call-badge {
-        display: inline-block;
-        background: #fff3e0;
-        color: #e65100;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        margin-right: 6px;
-    }
+section[data-testid="stSidebar"] .stMarkdown, 
+section[data-testid="stSidebar"] .stText {
+    color: var(--text-primary) !important;
+}
 
-    /* 快捷按钮 */
-    .quick-btn {
-        background: white !important;
-        border: 1px solid #e0e0e0 !important;
-        border-radius: 20px !important;
-        padding: 6px 14px !important;
-        font-size: 0.85rem !important;
-        transition: all 0.2s !important;
-    }
-    .quick-btn:hover {
-        border-color: #1e88e5 !important;
-        color: #1e88e5 !important;
-        background: #e3f2fd !important;
-    }
+/* 主标题 */
+.main-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #5b9fff, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.2rem;
+}
 
-    /* 引用来源卡片 */
-    .source-card {
-        background: #f5f5f5;
-        border-radius: 8px;
-        padding: 8px 12px;
-        margin-top: 8px;
-        font-size: 0.85rem;
-    }
+/* 数据卡片 */
+.data-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+.data-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+}
 
-    /* 思考过程折叠面板 */
-    .thinking-step {
-        padding: 4px 0;
-        font-size: 0.85rem;
-        color: #666;
-    }
+/* 统计数字 */
+.stat-number {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+}
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
 
-    /* 状态指示器 */
-    .status-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 6px;
-        animation: pulse 2s infinite;
-    }
-    .status-active {
-        background: #4caf50;
-    }
-    .status-idle {
-        background: #9e9e9e;
-    }
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
+/* Skill 标签 */
+.skill-tag {
+    display: inline-block;
+    background: var(--accent-light);
+    color: var(--accent);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin: 2px;
+    border: 1px solid rgba(91, 159, 255, 0.3);
+}
 
-    /* 欢迎卡片 */
-    .welcome-card {
-        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-        border-radius: 16px;
-        padding: 2rem;
-        margin-bottom: 1.5rem;
-    }
+/* 状态指示器 */
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+}
+.status-active { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.status-idle { background: var(--text-muted); }
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
 
-    /* 引用角标 */
-    .ref-badge {
-        display: inline-block;
-        background: #e8f5e9;
-        color: #2e7d32;
-        font-size: 0.7rem;
-        padding: 1px 6px;
-        border-radius: 4px;
-        font-weight: 600;
-        margin: 0 2px;
-        cursor: pointer;
-    }
+/* 欢迎卡片 */
+.welcome-card {
+    background: linear-gradient(135deg, rgba(91, 159, 255, 0.1), rgba(167, 139, 250, 0.1));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+/* 思考步骤 */
+.thinking-step {
+    padding: 3px 0;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+/* 工具标签 */
+.tool-call-badge {
+    display: inline-block;
+    background: rgba(251, 191, 36, 0.15);
+    color: var(--warning);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    margin-right: 6px;
+}
+
+/* 主题切换按钮 */
+.theme-toggle {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 999;
+}
+
+/* 分类条形图 */
+.category-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-hover);
+    margin-top: 4px;
+    overflow: hidden;
+}
+.category-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+/* 输入框 */
+.stChatInput textarea {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-primary) !important;
+    border-radius: 12px !important;
+}
+
+/* 聊天消息 */
+.stChatMessage {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+}
+
+/* expander */
+details {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 </style>
-""", unsafe_allow_html=True)
+"""
 
-# ========== 侧边栏 ==========
+LIGHT_CSS = """
+<style>
+/* ========== 明亮主题 ========== */
+:root {
+    --bg-primary: #fafbfc;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #f3f4f6;
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --text-muted: #9ca3af;
+    --accent: #2563eb;
+    --accent-light: rgba(37, 99, 235, 0.1);
+    --accent-glow: rgba(37, 99, 235, 0.3);
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+    --border: #e5e7eb;
+    --border-light: #d1d5db;
+    --shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.stApp {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+#MainMenu, footer {visibility: hidden;}
+
+section[data-testid="stSidebar"] {
+    background: var(--bg-secondary) !important;
+    border-right: 1px solid var(--border);
+}
+
+.main-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.2rem;
+}
+
+.data-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+    transition: all 0.2s;
+}
+.data-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.stat-number {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+}
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.skill-tag {
+    display: inline-block;
+    background: var(--accent-light);
+    color: var(--accent);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin: 2px;
+    border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+}
+.status-active { background: var(--success); }
+.status-idle { background: var(--text-muted); }
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.welcome-card {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.05), rgba(124, 58, 237, 0.05));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.thinking-step {
+    padding: 3px 0;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.tool-call-badge {
+    display: inline-block;
+    background: rgba(217, 119, 7, 0.1);
+    color: var(--warning);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    margin-right: 6px;
+}
+
+.stChatInput textarea {
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+}
+
+.stChatMessage {
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+}
+
+details {
+    background: var(--bg-hover) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+</style>
+"""
+
+# 根据主题选择CSS
+if st.session_state.theme == "dark":
+    st.markdown(DARK_CSS, unsafe_allow_html=True)
+else:
+    st.markdown(LIGHT_CSS, unsafe_allow_html=True)
+
+
+# ========== 主题切换按钮 ==========
+col_title, col_theme = st.columns([8, 2])
+with col_title:
+    st.markdown('<div class="main-title">🎓 湖南师范大学校园智能助手</div>', unsafe_allow_html=True)
+    st.caption("ReAct Agent v4.0 · 10 Skills · 统一 Skill 系统")
+with col_theme:
+    theme_col1, theme_col2 = st.columns(2)
+    with theme_col1:
+        if st.button("🌙 深色", use_container_width=True,
+                     key="dark_btn",
+                     disabled=(st.session_state.theme == "dark")):
+            st.session_state.theme = "dark"
+            st.rerun()
+    with theme_col2:
+        if st.button("☀️ 明亮", use_container_width=True,
+                     key="light_btn",
+                     disabled=(st.session_state.theme == "light")):
+            st.session_state.theme = "light"
+            st.rerun()
+
+
+# ========== 左侧数据面板 ==========
 with st.sidebar:
-    # Logo 和标题
     st.markdown("## 🎓 校园助手")
-    st.caption("湖南师范大学 · 智能问答")
+    st.caption("湖南师范大学 · 智能问答系统")
 
     st.divider()
 
-    # API Key 设置
+    # ---- 数据统计面板 ----
+    st.markdown("### 📊 数据面板")
+
+    # 文档总数
+    try:
+        doc_count = get_collection_count()
+    except Exception:
+        doc_count = 0
+
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        st.markdown(f"""
+        <div class="data-card">
+            <div class="stat-number">{doc_count}</div>
+            <div class="stat-label">知识库文档</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_s2:
+        st.markdown(f"""
+        <div class="data-card">
+            <div class="stat-number">{len(ALL_DOCS)}</div>
+            <div class="stat-label">结构化文档</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 文档分类统计
+    st.markdown("#### 📁 文档分类")
+    categories = {
+        "学校概况": 3,
+        "学院介绍": 25,
+        "教务指南": 8,
+        "政策文档": 6,
+        "校园生活": 18,
+        "学生FAQ": 16,
+        "更多服务": 8,
+        "实用指南": 8,
+    }
+    max_count = max(categories.values())
+    cat_colors = ["#5b9fff", "#a78bfa", "#4ade80", "#fbbf24",
+                  "#f87171", "#22d3ee", "#fb923c", "#e879f9"]
+
+    for i, (cat, count) in enumerate(categories.items()):
+        pct = int(count / max_count * 100)
+        color = cat_colors[i % len(cat_colors)]
+        st.markdown(f"""
+        <div style="margin-bottom: 6px;">
+            <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                <span>{cat}</span>
+                <span style="color: var(--text-muted);">{count}篇</span>
+            </div>
+            <div class="category-bar">
+                <div class="category-bar-fill" style="width:{pct}%; background:{color};"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # ---- Skill 面板 ----
+    st.markdown("### 🔧 Skill 工具箱")
+    st.caption(f"共 {len(registry.all())} 个 Skill")
+
+    skill_categories = {}
+    for skill in registry.all():
+        cat = skill.category
+        if cat not in skill_categories:
+            skill_categories[cat] = []
+        skill_categories[cat].append(skill.name)
+
+    for cat, skills in skill_categories.items():
+        tags = "".join(f'<span class="skill-tag">{s}</span>' for s in skills)
+        st.markdown(f"""
+        <div class="data-card" style="padding:10px;">
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">{cat}</div>
+            {tags}
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # ---- 系统状态 ----
+    st.markdown("### ⚡ 系统状态")
+
+    has_key = "user_api_key" in st.session_state and st.session_state.user_api_key
+    if has_key:
+        st.markdown('<span class="status-dot status-active"></span> Agent 在线', unsafe_allow_html=True)
+    else:
+        st.markdown('<span class="status-dot status-idle"></span> 等待 API Key', unsafe_allow_html=True)
+
+    # 模型信息
+    st.markdown("""
+    <div class="data-card" style="padding:10px;">
+        <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">模型信息</div>
+        <div style="font-size:0.82rem;">
+            🧠 GLM-4-Flash<br/>
+            📐 embedding-2 (1024维)<br/>
+            🗄️ ChromaDB 本地
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # ---- API Key 设置 ----
     st.markdown("### 🔑 API Key")
     api_key_input = st.text_input(
         "智谱 API Key",
         type="password",
-        placeholder="请输入你的 API Key",
+        placeholder="粘贴你的 API Key",
         help="在 https://open.bigmodel.cn/ 注册获取",
         key="api_key_input",
         label_visibility="collapsed"
@@ -183,48 +521,30 @@ with st.sidebar:
         st.session_state.user_api_key = api_key_input.strip()
         reset_clients()
         reset_client()
-        st.success("✅ 已设置")
+        st.success("✅ Key 已设置")
     else:
-        st.warning("⚠️ 请先输入 API Key")
+        st.warning("⚠️ 请输入 API Key")
         if "user_api_key" in st.session_state:
             del st.session_state.user_api_key
 
     st.divider()
 
-    # 系统状态
-    st.markdown("### 📊 系统状态")
-    has_key = "user_api_key" in st.session_state and st.session_state.user_api_key
-    if has_key:
-        st.markdown('<span class="status-dot status-active"></span> Agent 在线', unsafe_allow_html=True)
-    else:
-        st.markdown('<span class="status-dot status-idle"></span> 等待输入 Key', unsafe_allow_html=True)
-
-    try:
-        doc_count = get_collection_count()
-        st.markdown(f"📚 知识库：**{doc_count}** 条文档")
-    except Exception:
-        st.markdown("📚 知识库：连接中...")
-
-    st.divider()
-
-    # 控制面板
+    # ---- 控制面板 ----
     st.markdown("### ⚙️ 设置")
+
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
         st.session_state.last_result = None
         st.rerun()
 
     show_thinking = st.toggle("显示思考过程", value=True)
+    show_sources = st.toggle("显示引用来源", value=True)
 
     st.divider()
-
-    # 版本信息
-    st.caption("v2.0 · ReAct Agent · 混合检索")
+    st.caption("v4.0 · 统一Skill · 10工具 · 99文档")
 
 
 # ========== 主界面 ==========
-st.markdown('<div class="main-title">🎓 湖南师范大学校园智能助手</div>', unsafe_allow_html=True)
-st.caption("基于 ReAct Agent + 混合检索 + Rerank 的校园 RAG 问答系统")
 
 # 初始化
 if "messages" not in st.session_state:
@@ -237,22 +557,20 @@ if not st.session_state.messages:
     st.markdown("""
     <div class="welcome-card">
         <h3>👋 你好！我是师大校园助手</h3>
-        <p style="color:#555; margin: 0.5rem 0;">
-            我可以帮你查询学校政策、专业介绍、奖学金评定、处分规定等各类校园信息。
-        </p>
-        <p style="color:#777; font-size: 0.9rem; margin-top: 1rem;">
-            💡 试试问我：
+        <p style="color: var(--text-secondary); margin: 0.5rem 0;">
+            我可以帮你查询 <b>学校政策、专业介绍、奖学金评定、处分规定、学费住宿、社团活动</b> 等各类校园信息。<br/>
+            现在配备 <b>10个Skill工具</b>，支持知识检索、GPA计算、奖学金判断、毕业检查等功能。
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    # 快捷提问按钮
+    # 快捷提问
     col1, col2, col3, col4 = st.columns(4)
     quick_questions = [
         "奖学金评定条件是什么？",
-        "考试作弊有什么后果？",
-        "挂科了怎么办？",
-        "学校有哪些专业？",
+        "学费多少钱？",
+        "入党流程是什么？",
+        "保研需要什么条件？",
     ]
     cols = [col1, col2, col3, col4]
     for i, (col, q) in enumerate(zip(cols, quick_questions)):
@@ -266,20 +584,31 @@ if "quick_question" in st.session_state and st.session_state.quick_question:
     q = st.session_state.quick_question
     st.session_state.quick_question = None
     st.session_state.messages.append({"role": "user", "content": q})
-    # 下面会自动处理
-
 
 # ========== 显示历史消息 ==========
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
         st.markdown(msg["content"])
-        # 如果有助手消息带引用来源
-        if msg["role"] == "assistant" and msg.get("sources"):
-            st.markdown("---")
-            st.markdown("**📄 参考来源：**")
-            for i, src in enumerate(msg["sources"]):
-                with st.expander(f"来源 {i+1}：{src.get('title', '未知')}"):
-                    st.markdown(src.get("content", ""))
+
+        # 助手消息附带信息
+        if msg["role"] == "assistant":
+            # 工具调用
+            if msg.get("tool_calls"):
+                with st.expander(f"🔧 调用了 {len(msg['tool_calls'])} 个工具"):
+                    for tc in msg["tool_calls"]:
+                        tool_name = tc["tool"]
+                        tool_args = tc.get("args", {})
+                        args_str = ", ".join(f"{k}={v}" for k, v in tool_args.items())
+                        st.markdown(f'- <span class="tool-call-badge">{tool_name}</span> {args_str}',
+                                   unsafe_allow_html=True)
+
+            # 引用来源
+            if msg.get("sources") and show_sources:
+                st.markdown("---")
+                st.markdown(f"**📄 参考来源（{len(msg['sources'])}条）**")
+                for i, src in enumerate(msg["sources"]):
+                    with st.expander(f"来源 {i+1}：{src.get('title', '未知')}"):
+                        st.markdown(src.get("content", "")[:800])
 
 
 # ========== 输入框 ==========
@@ -303,20 +632,19 @@ if prompt := st.chat_input("问我关于校园的问题...", disabled=not has_ap
         else:
             thinking_expander = None
 
-        # 回答容器
         answer_placeholder = st.empty()
 
         try:
-            # 显示思考中状态
+            # 思考中
             if thinking_expander:
                 with thinking_expander:
                     thinking_placeholder = st.empty()
-                    thinking_placeholder.markdown("⏳ 正在思考...")
+                    thinking_placeholder.markdown("⏳ 正在分析问题...")
 
             # 调用 Agent
             result = agent_invoke(
                 question=prompt,
-                chat_history=st.session_state.messages[:-1],  # 排除刚加的用户消息
+                chat_history=st.session_state.messages[:-1],
             )
 
             # 显示思考过程
@@ -327,57 +655,52 @@ if prompt := st.chat_input("问我关于校园的问题...", disabled=not has_ap
                         steps_html += f'<div class="thinking-step">{step}</div>'
                     thinking_placeholder.markdown(steps_html, unsafe_allow_html=True)
 
-                    # 显示工具调用
                     tool_calls = result.get("tool_calls", [])
                     if tool_calls:
                         st.markdown("---")
-                        st.markdown("**🔧 调用的工具：**")
+                        st.markdown(f"**🔧 调用了 {len(tool_calls)} 个工具：**")
                         for tc in tool_calls:
                             tool_name = tc["tool"]
                             tool_args = tc.get("args", {})
                             args_str = ", ".join(f"{k}={v}" for k, v in tool_args.items())
-                            st.markdown(f'- <span class="tool-call-badge">{tool_name}</span> {args_str}', unsafe_allow_html=True)
+                            st.markdown(f'- <span class="tool-call-badge">{tool_name}</span> {args_str}',
+                                       unsafe_allow_html=True)
 
-            # 流式输出回答（模拟打字机效果）
+            # 流式输出
             answer = result.get("answer", "抱歉，我没有找到答案。")
             displayed = ""
             words = list(answer)
             for i in range(len(words)):
                 displayed += words[i]
-                if i % 3 == 0 or i == len(words) - 1:  # 每3个字刷新一次
+                if i % 3 == 0 or i == len(words) - 1:
                     answer_placeholder.markdown(displayed + "▌")
                     time.sleep(0.01)
-
-            # 最终显示（去掉光标）
             answer_placeholder.markdown(answer)
 
-            # 提取引用来源（从检索结果中解析）
+            # 解析引用来源
+            import re
             sources = []
             retrieved_docs = result.get("retrieved_docs", [])
             for doc_text in retrieved_docs:
-                # 简单解析来源标题和内容
                 lines = doc_text.split("\n")
                 title = "未知来源"
-                content = doc_text
                 for line in lines:
                     if line.startswith("【来源"):
-                        # 提取标题
-                        import re
                         match = re.search(r'《(.+?)》', line)
                         if match:
                             title = match.group(1)
                         break
-                sources.append({"title": title, "content": content})
+                sources.append({"title": title, "content": doc_text})
 
-            # 显示引用来源
-            if sources:
+            # 显示引用
+            if sources and show_sources:
                 st.markdown("---")
-                st.markdown("**📄 参考来源：**")
-                for i, src in enumerate(sources[:5]):  # 最多显示5个
+                st.markdown(f"**📄 参考来源（{len(sources)}条）**")
+                for i, src in enumerate(sources[:5]):
                     with st.expander(f"来源 {i+1}：{src.get('title', '未知')}"):
                         st.markdown(src.get("content", "")[:800])
 
-            # 保存到历史
+            # 保存历史
             msg_data = {
                 "role": "assistant",
                 "content": answer,
