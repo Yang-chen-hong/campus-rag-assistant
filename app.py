@@ -19,6 +19,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from agent_graph import agent_invoke, reset_client
 from retriever import get_collection_count, reset_clients
+from init_db import init_database
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -27,6 +28,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ========== 初始化数据库 ==========
+try:
+    init_database()
+except Exception:
+    pass
 
 # 自定义 CSS
 st.markdown("""

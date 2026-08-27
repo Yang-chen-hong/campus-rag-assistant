@@ -48,3 +48,6 @@ logs/
 test_mcp.py
 test_v2.py
 test_agent.py
+test_v3.py
+check_db.py
+add_policy_docs.py
