@@ -227,24 +227,27 @@ details {
 
 LIGHT_CSS = """
 <style>
-/* ========== 明亮主题 ========== */
+/* ========== 明亮主题 v2 — 暖蓝灰底 + 白卡片 ========== */
 :root {
-    --bg-primary: #fafbfc;
-    --bg-secondary: #ffffff;
+    --bg-primary: #edf0f6;
+    --bg-secondary: #f5f7fa;
     --bg-card: #ffffff;
-    --bg-hover: #f3f4f6;
-    --text-primary: #1f2937;
-    --text-secondary: #6b7280;
-    --text-muted: #9ca3af;
-    --accent: #2563eb;
-    --accent-light: rgba(37, 99, 235, 0.1);
-    --accent-glow: rgba(37, 99, 235, 0.3);
-    --success: #16a34a;
-    --warning: #d97706;
-    --danger: #dc2626;
-    --border: #e5e7eb;
-    --border-light: #d1d5db;
-    --shadow: 0 2px 8px rgba(0,0,0,0.06);
+    --bg-hover: #e5e9f2;
+    --bg-input: #ffffff;
+    --text-primary: #1a202c;
+    --text-secondary: #4a5568;
+    --text-muted: #718096;
+    --accent: #4f46e5;
+    --accent-light: rgba(79, 70, 229, 0.08);
+    --accent-glow: rgba(79, 70, 229, 0.25);
+    --accent-dark: #3730a3;
+    --success: #059669;
+    --warning: #b45309;
+    --danger: #b91c1c;
+    --border: #cbd5e0;
+    --border-light: #e2e8f0;
+    --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-hover: 0 4px 12px rgba(79, 70, 229, 0.15);
 }
 
 .stApp {
@@ -254,23 +257,31 @@ LIGHT_CSS = """
 
 #MainMenu, footer {visibility: hidden;}
 
+/* 侧边栏：浅灰底，与主区域区分 */
 section[data-testid="stSidebar"] {
     background: var(--bg-secondary) !important;
-    border-right: 1px solid var(--border);
+    border-right: 2px solid var(--border) !important;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+}
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] .stText {
+    color: var(--text-primary) !important;
 }
 
+/* 主标题 */
 .main-title {
     font-size: 1.8rem;
     font-weight: 800;
-    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.2rem;
 }
 
+/* 数据卡片：白底 + 阴影，在灰底上突出 */
 .data-card {
     background: var(--bg-card);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-light);
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 12px;
@@ -279,9 +290,11 @@ section[data-testid="stSidebar"] {
 }
 .data-card:hover {
     border-color: var(--accent);
-    box-shadow: 0 4px 16px var(--accent-glow);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
 }
 
+/* 统计数字 */
 .stat-number {
     font-size: 1.8rem;
     font-weight: 800;
@@ -292,20 +305,23 @@ section[data-testid="stSidebar"] {
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 4px;
+    font-weight: 500;
 }
 
+/* Skill 标签：更明显的背景和边框 */
 .skill-tag {
     display: inline-block;
     background: var(--accent-light);
-    color: var(--accent);
+    color: var(--accent-dark);
     padding: 3px 10px;
     border-radius: 12px;
     font-size: 0.72rem;
     font-weight: 600;
     margin: 2px;
-    border: 1px solid rgba(37, 99, 235, 0.2);
+    border: 1px solid rgba(79, 70, 229, 0.25);
 }
 
+/* 状态指示器 */
 .status-dot {
     display: inline-block;
     width: 8px;
@@ -314,57 +330,118 @@ section[data-testid="stSidebar"] {
     margin-right: 6px;
     animation: pulse 2s infinite;
 }
-.status-active { background: var(--success); }
+.status-active { background: var(--success); box-shadow: 0 0 4px var(--success); }
 .status-idle { background: var(--text-muted); }
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
 }
 
+/* 欢迎卡片：更明显的渐变 */
 .welcome-card {
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.05), rgba(124, 58, 237, 0.05));
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(124, 58, 237, 0.08));
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 2rem;
     margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
 }
 
+/* 思考步骤 */
 .thinking-step {
     padding: 3px 0;
     font-size: 0.82rem;
     color: var(--text-secondary);
 }
 
+/* 工具标签：更明显 */
 .tool-call-badge {
     display: inline-block;
-    background: rgba(217, 119, 7, 0.1);
+    background: rgba(180, 83, 9, 0.12);
     color: var(--warning);
     padding: 2px 8px;
     border-radius: 10px;
     font-size: 0.72rem;
-    font-weight: 500;
+    font-weight: 600;
     margin-right: 6px;
+    border: 1px solid rgba(180, 83, 9, 0.25);
 }
 
+/* 输入框：白底 + 明确边框 */
 .stChatInput textarea {
-    border: 1px solid var(--border) !important;
+    background: var(--bg-input) !important;
+    border: 2px solid var(--border) !important;
+    color: var(--text-primary) !important;
     border-radius: 12px !important;
+    box-shadow: var(--shadow) !important;
+}
+.stChatInput textarea:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-glow) !important;
 }
 
+/* 聊天消息：白底 + 阴影 */
 .stChatMessage {
-    border: 1px solid var(--border) !important;
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-light) !important;
     border-radius: 12px !important;
+    box-shadow: var(--shadow) !important;
 }
 
+/* expander */
 details {
-    background: var(--bg-hover) !important;
+    background: var(--bg-secondary) !important;
     border: 1px solid var(--border) !important;
     border-radius: 8px !important;
+    box-shadow: var(--shadow) !important;
 }
 
-::-webkit-scrollbar { width: 6px; }
+/* 分类条形图轨道更明显 */
+.category-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-hover);
+    margin-top: 4px;
+    overflow: hidden;
+}
+.category-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+/* 按钮 */
+.stButton > button {
+    border: 1px solid var(--border) !important;
+    border-radius: 20px !important;
+    color: var(--text-secondary) !important;
+    background: var(--bg-card) !important;
+    transition: all 0.2s !important;
+}
+.stButton > button:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    background: var(--accent-light) !important;
+}
+
+/* 主题切换按钮（激活态） */
+.stButton > button:disabled {
+    background: var(--accent) !important;
+    color: white !important;
+    border-color: var(--accent) !important;
+    opacity: 0.7;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
-::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* 分隔线 */
+hr {
+    border-color: var(--border) !important;
+}
 </style>
 """
 
