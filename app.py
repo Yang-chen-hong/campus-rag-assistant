@@ -227,7 +227,7 @@ details {
 
 LIGHT_CSS = """
 <style>
-/* ========== 明亮主题 v2 — 暖蓝灰底 + 白卡片 ========== */
+/* ========== 明亮主题 v3 — 全面覆盖所有组件 ========== */
 :root {
     --bg-primary: #edf0f6;
     --bg-secondary: #f5f7fa;
@@ -235,8 +235,8 @@ LIGHT_CSS = """
     --bg-hover: #e5e9f2;
     --bg-input: #ffffff;
     --text-primary: #1a202c;
-    --text-secondary: #4a5568;
-    --text-muted: #718096;
+    --text-secondary: #374151;
+    --text-muted: #6b7280;
     --accent: #4f46e5;
     --accent-light: rgba(79, 70, 229, 0.08);
     --accent-glow: rgba(79, 70, 229, 0.25);
@@ -250,25 +250,54 @@ LIGHT_CSS = """
     --shadow-hover: 0 4px 12px rgba(79, 70, 229, 0.15);
 }
 
+/* ===== 全局 ===== */
 .stApp {
     background: var(--bg-primary);
+    color: var(--text-primary) !important;
+}
+.stApp p,
+.stApp span,
+.stApp div,
+.stApp li,
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
     color: var(--text-primary);
 }
-
 #MainMenu, footer {visibility: hidden;}
 
-/* 侧边栏：浅灰底，与主区域区分 */
+/* ===== 侧边栏全面修复 ===== */
 section[data-testid="stSidebar"] {
     background: var(--bg-secondary) !important;
     border-right: 2px solid var(--border) !important;
     box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 }
+/* 侧边栏所有文字元素 */
 section[data-testid="stSidebar"] .stMarkdown,
-section[data-testid="stSidebar"] .stText {
+section[data-testid="stSidebar"] .stMarkdown p,
+section[data-testid="stSidebar"] .stMarkdown span,
+section[data-testid="stSidebar"] .stMarkdown div,
+section[data-testid="stSidebar"] .stMarkdown li,
+section[data-testid="stSidebar"] .stMarkdown h1,
+section[data-testid="stSidebar"] .stMarkdown h2,
+section[data-testid="stSidebar"] .stMarkdown h3,
+section[data-testid="stSidebar"] .stMarkdown h4,
+section[data-testid="stSidebar"] .stText,
+section[data-testid="stSidebar"] .stText p,
+section[data-testid="stSidebar"] .stCaption,
+section[data-testid="stSidebar"] .stCaption p,
+section[data-testid="stSidebar"] .stCaption span,
+section[data-testid="stSidebar"] small,
+section[data-testid="stSidebar"] label {
     color: var(--text-primary) !important;
+    opacity: 1 !important;
+}
+/* 侧边栏次要文字 */
+section[data-testid="stSidebar"] .stCaption,
+section[data-testid="stSidebar"] .stCaption p,
+section[data-testid="stSidebar"] small {
+    color: var(--text-secondary) !important;
 }
 
-/* 主标题 */
+/* ===== 主标题 ===== */
 .main-title {
     font-size: 1.8rem;
     font-weight: 800;
@@ -278,7 +307,7 @@ section[data-testid="stSidebar"] .stText {
     margin-bottom: 0.2rem;
 }
 
-/* 数据卡片：白底 + 阴影，在灰底上突出 */
+/* ===== 数据卡片 ===== */
 .data-card {
     background: var(--bg-card);
     border: 1px solid var(--border-light);
@@ -294,7 +323,6 @@ section[data-testid="stSidebar"] .stText {
     transform: translateY(-1px);
 }
 
-/* 统计数字 */
 .stat-number {
     font-size: 1.8rem;
     font-weight: 800;
@@ -308,20 +336,21 @@ section[data-testid="stSidebar"] .stText {
     font-weight: 500;
 }
 
-/* Skill 标签：更明显的背景和边框 */
+/* ===== Skill 标签 ===== */
 .skill-tag {
     display: inline-block;
     background: var(--accent-light);
-    color: var(--accent-dark);
+    color: var(--accent-dark) !important;
     padding: 3px 10px;
     border-radius: 12px;
     font-size: 0.72rem;
     font-weight: 600;
     margin: 2px;
     border: 1px solid rgba(79, 70, 229, 0.25);
+    opacity: 1 !important;
 }
 
-/* 状态指示器 */
+/* ===== 状态指示器 ===== */
 .status-dot {
     display: inline-block;
     width: 8px;
@@ -337,7 +366,7 @@ section[data-testid="stSidebar"] .stText {
     50% { opacity: 0.4; }
 }
 
-/* 欢迎卡片：更明显的渐变 */
+/* ===== 欢迎卡片 ===== */
 .welcome-card {
     background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(124, 58, 237, 0.08));
     border: 1px solid var(--border);
@@ -346,57 +375,127 @@ section[data-testid="stSidebar"] .stText {
     margin-bottom: 1.5rem;
     box-shadow: var(--shadow);
 }
+.welcome-card p {
+    color: var(--text-secondary) !important;
+}
 
-/* 思考步骤 */
+/* ===== 思考步骤 ===== */
 .thinking-step {
     padding: 3px 0;
     font-size: 0.82rem;
-    color: var(--text-secondary);
+    color: var(--text-secondary) !important;
+    opacity: 1 !important;
 }
 
-/* 工具标签：更明显 */
+/* ===== 工具标签 ===== */
 .tool-call-badge {
     display: inline-block;
     background: rgba(180, 83, 9, 0.12);
-    color: var(--warning);
+    color: var(--warning) !important;
     padding: 2px 8px;
     border-radius: 10px;
     font-size: 0.72rem;
     font-weight: 600;
     margin-right: 6px;
     border: 1px solid rgba(180, 83, 9, 0.25);
+    opacity: 1 !important;
 }
 
-/* 输入框：白底 + 明确边框 */
-.stChatInput textarea {
+/* ===== 聊天输入框（全面修复） ===== */
+.stChatInput {
+    background: var(--bg-primary) !important;
+}
+.stChatInput > div {
     background: var(--bg-input) !important;
     border: 2px solid var(--border) !important;
-    color: var(--text-primary) !important;
     border-radius: 12px !important;
     box-shadow: var(--shadow) !important;
 }
+.stChatInput textarea {
+    background: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border: none !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+}
+.stChatInput textarea::placeholder {
+    color: var(--text-muted) !important;
+    opacity: 0.7;
+}
 .stChatInput textarea:focus {
+    outline: none !important;
+}
+.stChatInput > div:focus-within {
     border-color: var(--accent) !important;
     box-shadow: 0 0 0 3px var(--accent-glow) !important;
 }
+.stChatInput button {
+    color: var(--accent) !important;
+}
 
-/* 聊天消息：白底 + 阴影 */
+/* ===== 聊天气泡（全面修复文字颜色） ===== */
 .stChatMessage {
     background: var(--bg-card) !important;
     border: 1px solid var(--border-light) !important;
     border-radius: 12px !important;
     box-shadow: var(--shadow) !important;
 }
+.stChatMessage .stMarkdown,
+.stChatMessage .stMarkdown p,
+.stChatMessage .stMarkdown span,
+.stChatMessage .stMarkdown div,
+.stChatMessage .stMarkdown li,
+.stChatMessage .stMarkdown h1,
+.stChatMessage .stMarkdown h2,
+.stChatMessage .stMarkdown h3,
+.stChatMessage .stMarkdown h4,
+.stChatMessage .stMarkdown strong,
+.stChatMessage .stMarkdown em,
+.stChatMessage .stMarkdown code,
+.stChatMessage .stMarkdown a,
+.stChatMessage p,
+.stChatMessage span,
+.stChatMessage div {
+    color: var(--text-primary) !important;
+    opacity: 1 !important;
+}
+.stChatMessage strong {
+    font-weight: 700 !important;
+}
+.stChatMessage code {
+    background: var(--bg-hover) !important;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.stChatMessage a {
+    color: var(--accent) !important;
+    text-decoration: underline;
+}
 
-/* expander */
+/* ===== Expander ===== */
 details {
     background: var(--bg-secondary) !important;
     border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     box-shadow: var(--shadow) !important;
 }
+details summary,
+details summary p,
+details summary span {
+    color: var(--text-primary) !important;
+    opacity: 1 !important;
+}
+details .stMarkdown p,
+details .stMarkdown span,
+details p,
+details span,
+details div {
+    color: var(--text-primary) !important;
+    opacity: 1 !important;
+}
 
-/* 分类条形图轨道更明显 */
+/* ===== 分类条形图 ===== */
 .category-bar {
     height: 6px;
     border-radius: 3px;
@@ -410,37 +509,89 @@ details {
     transition: width 0.5s ease;
 }
 
-/* 按钮 */
+/* ===== 按钮 ===== */
 .stButton > button {
     border: 1px solid var(--border) !important;
     border-radius: 20px !important;
     color: var(--text-secondary) !important;
     background: var(--bg-card) !important;
     transition: all 0.2s !important;
+    opacity: 1 !important;
 }
 .stButton > button:hover {
     border-color: var(--accent) !important;
     color: var(--accent) !important;
     background: var(--accent-light) !important;
 }
-
-/* 主题切换按钮（激活态） */
 .stButton > button:disabled {
     background: var(--accent) !important;
     color: white !important;
     border-color: var(--accent) !important;
-    opacity: 0.7;
+    opacity: 0.7 !important;
 }
 
-/* 滚动条 */
+/* ===== Toggle 开关 ===== */
+.stToggle label,
+.stToggle p,
+.stToggle span {
+    color: var(--text-primary) !important;
+    opacity: 1 !important;
+}
+
+/* ===== 文本输入 ===== */
+.stTextInput input {
+    background: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    opacity: 1 !important;
+}
+.stTextInput input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-glow) !important;
+}
+.stTextInput label,
+.stTextInput p {
+    color: var(--text-primary) !important;
+    opacity: 1 !important;
+}
+
+/* ===== Caption 小字 ===== */
+.stCaption,
+.stCaption p,
+.stCaption span,
+[data-testid="stCaptionContainer"] {
+    color: var(--text-secondary) !important;
+    opacity: 1 !important;
+}
+
+/* ===== 分隔线 ===== */
+hr {
+    border-color: var(--border) !important;
+    opacity: 1 !important;
+}
+
+/* ===== 链接 ===== */
+a {
+    color: var(--accent) !important;
+}
+
+/* ===== 滚动条 ===== */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-/* 分隔线 */
-hr {
-    border-color: var(--border) !important;
+/* ===== 主内容区文字兜底 ===== */
+.main .block-container {
+    color: var(--text-primary) !important;
+}
+.main .block-container p,
+.main .block-container span,
+.main .block-container div,
+.main .block-container li {
+    color: var(--text-primary) !important;
+    opacity: 1 !important;
 }
 </style>
 """
