@@ -402,6 +402,18 @@ section[data-testid="stSidebar"] small {
 }
 
 /* ===== 聊天输入框（全面修复） ===== */
+[data-testid="stBottom"] {
+    background: var(--bg-primary) !important;
+}
+[data-testid="stBottom"] > div {
+    background: var(--bg-primary) !important;
+}
+[data-testid="stChatInputContainer"] {
+    background: var(--bg-primary) !important;
+}
+[data-testid="stChatInputContainer"] > div {
+    background: var(--bg-primary) !important;
+}
 .stChatInput {
     background: var(--bg-primary) !important;
 }
@@ -431,6 +443,7 @@ section[data-testid="stSidebar"] small {
 }
 .stChatInput button {
     color: var(--accent) !important;
+    background: transparent !important;
 }
 
 /* ===== 聊天气泡（全面修复文字颜色） ===== */
