@@ -120,3 +120,43 @@ def create_embedding(text: str, model: str = "embedding-2") -> list:
     resp.raise_for_status()
     data = resp.json()
     return data["data"][0]["embedding"]
+
+
+def create_embeddings_batch(texts: list, model: str = "embedding-2", batch_size: int = 16) -> list:
+    """
+    批量调用 embedding API，返回向量列表的列表。
+    智谱 embedding-2 支持一次传入多条文本，提高效率。
+    """
+    api_key = _get_api_key()
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    all_embeddings = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        valid_batch = [t if t and t.strip() else "空" for t in batch]
+        payload = {
+            "model": model,
+            "input": valid_batch,
+        }
+        try:
+            resp = requests.post(
+                f"{BASE_URL}/embeddings",
+                headers=headers,
+                json=payload,
+                timeout=60,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            batch_embeds = [item["embedding"] for item in data["data"]]
+            all_embeddings.extend(batch_embeds)
+        except Exception:
+            for t in batch:
+                try:
+                    all_embeddings.append(create_embedding(t, model))
+                except Exception:
+                    all_embeddings.append([0.0] * 1024)
+
+    return all_embeddings

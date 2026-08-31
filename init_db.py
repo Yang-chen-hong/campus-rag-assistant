@@ -3102,6 +3102,73 @@ def _generate_bulk_docs():
     return docs
 
 
+def _import_from_json():
+    """从 db_export/docs_export.json 导入全部文档到数据库（20046条）"""
+    import json
+    import os
+
+    json_path = os.path.join(os.path.dirname(__file__), "db_export", "docs_export.json")
+    if not os.path.exists(json_path):
+        return 0
+
+    from zhipu_api import create_embeddings_batch
+
+    client = chromadb.PersistentClient(path=DB_PATH)
+    col = client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"}
+    )
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        all_docs = json.load(f)
+
+    # 过滤已存在的
+    to_add = []
+    for doc in all_docs:
+        existing = col.get(ids=[doc["id"]])
+        if not existing or not existing.get("ids"):
+            to_add.append(doc)
+
+    if not to_add:
+        return 0
+
+    # 批量导入
+    batch_size = 32
+    added = 0
+    for i in range(0, len(to_add), batch_size):
+        batch = to_add[i:i + batch_size]
+        texts = [d["content"] for d in batch]
+        ids = [d["id"] for d in batch]
+        metas = [{"title": d.get("title", ""), "source": d.get("source", "unknown")} for d in batch]
+
+        try:
+            embeddings = create_embeddings_batch(texts, batch_size=batch_size)
+            col.add(
+                ids=ids,
+                documents=texts,
+                embeddings=embeddings,
+                metadatas=metas,
+            )
+            added += len(batch)
+        except Exception:
+            # 批量失败则逐条
+            for j, d in enumerate(batch):
+                try:
+                    from zhipu_api import create_embedding
+                    emb = create_embedding(d["content"])
+                    col.add(
+                        ids=[d["id"]],
+                        documents=[d["content"]],
+                        embeddings=[emb],
+                        metadatas=[{"title": d.get("title", ""), "source": d.get("source", "unknown")}],
+                    )
+                    added += 1
+                except Exception:
+                    pass
+
+    return added
+
+
 def init_database():
     """检查并添加结构化文档到数据库，如果数据库条数不足则自动扩充"""
     try:
@@ -3111,13 +3178,22 @@ def init_database():
             metadata={"hnsw:space": "cosine"}
         )
 
-        from zhipu_api import create_embedding
+        total_count = col.count()
 
-        # Step 1: 添加结构化文档（ALL_DOCS）
+        # Step 1: 如果数量极少（<5000），优先从 JSON 导入完整 20046 条
+        if total_count < 5000:
+            try:
+                _import_from_json()
+                total_count = col.count()
+            except Exception:
+                pass
+
+        # Step 2: 添加结构化文档（ALL_DOCS）
         existing = col.get(where={"source": "structured_policy"}, include=["metadatas"])
         existing_count = len(existing.get("ids", []))
 
         if existing_count < len(ALL_DOCS):
+            from zhipu_api import create_embedding
             for i, doc in enumerate(ALL_DOCS):
                 doc_id = f"policy_struct_{i}"
                 existing_doc = col.get(ids=[doc_id])
@@ -3134,9 +3210,10 @@ def init_database():
                 except Exception:
                     pass
 
-        # Step 2: 检查总数，如果不足10000条则批量生成补充
+        # Step 3: 如果还是不足10000条，批量生成补充
         total_count = col.count()
         if total_count < 10000:
+            from zhipu_api import create_embedding
             bulk_docs = _generate_bulk_docs()
             for i, doc in enumerate(bulk_docs):
                 doc_id = f"bulk_{i}"
