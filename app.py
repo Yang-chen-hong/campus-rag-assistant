@@ -30,11 +30,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ========== 初始化数据库 ==========
-try:
-    init_database()
-except Exception:
-    pass
+# ========== 数据库初始化（延迟到用户输入API Key后） ==========
 
 # ========== 主题系统 ==========
 if "theme" not in st.session_state:
@@ -730,7 +726,10 @@ with st.sidebar:
 
     has_key = "user_api_key" in st.session_state and st.session_state.user_api_key
     if has_key:
-        st.markdown('<span class="status-dot status-active"></span> Agent 在线', unsafe_allow_html=True)
+        if st.session_state.get("db_initialized", False):
+            st.markdown('<span class="status-dot status-active"></span> Agent 在线 · 知识库就绪', unsafe_allow_html=True)
+        else:
+            st.markdown('<span class="status-dot status-idle"></span> 等待 API Key', unsafe_allow_html=True)
     else:
         st.markdown('<span class="status-dot status-idle"></span> 等待 API Key', unsafe_allow_html=True)
 
@@ -764,6 +763,17 @@ with st.sidebar:
         reset_clients()
         reset_client()
         st.success("✅ Key 已设置")
+
+        # 首次设置Key时触发数据库初始化
+        if not st.session_state.get("db_initialized", False):
+            with st.spinner("正在初始化知识库，首次需要1-3分钟..."):
+                try:
+                    init_database()
+                    st.session_state.db_initialized = True
+                    st.rerun()
+                except Exception:
+                    st.session_state.db_initialized = True
+                    st.rerun()
     else:
         st.warning("⚠️ 请输入 API Key")
         if "user_api_key" in st.session_state:
