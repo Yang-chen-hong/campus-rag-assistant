@@ -2951,7 +2951,7 @@ def _import_from_json():
 
 
 def init_database():
-    """检查并添加结构化文档到数据库，如果数据库条数不足则自动扩充"""
+    """检查并添加结构化文档到数据库，清理旧数据，如果条数不足则自动扩充"""
     try:
         client = chromadb.PersistentClient(path=DB_PATH)
         col = client.get_or_create_collection(
@@ -2961,7 +2961,39 @@ def init_database():
 
         total_count = col.count()
 
-        # Step 1: 如果数量极少（<5000），优先从 JSON 导入完整 20046 条
+        # Step 0: 清理旧的结构化文档（ID可能变了）
+        existing = col.get(where={"source": "structured_policy"}, include=["metadatas"])
+        existing_ids = existing.get("ids", [])
+        if len(existing_ids) != len(ALL_DOCS):
+            # 数量不匹配，删除旧的重新添加
+            if existing_ids:
+                col.delete(ids=existing_ids)
+
+        # Step 0b: 清理其他学院相关文档
+        other_colleges = ['文学院', '历史文化学院', '数学与统计学院', '物理与电子科学学院',
+            '化学化工学院', '生命科学学院', '外国语学院', '教育科学学院',
+            '新闻与传播学院', '法学院', '体育学院', '音乐学院', '美术学院',
+            '地理科学学院', '旅游学院', '政治与公共管理学院', '马克思主义学院',
+            '国际汉语文化学院', '创新创业学院', '教师教育学院', '商学院',
+            '医学', '护理', '药学']
+        all_data = col.get(limit=total_count, include=["documents", "metadatas"])
+        all_ids = all_data.get("ids", [])
+        all_docs = all_data.get("documents", [])
+        all_metas = all_data.get("metadatas", [])
+        to_delete = []
+        for i in range(len(all_ids)):
+            text = (all_docs[i] or "") + " " + (all_metas[i].get("title", "") if all_metas[i] else "")
+            has_other = any(c in text for c in other_colleges)
+            has_cise = "信息科学与工程" in text or "cise" in text.lower()
+            if has_other and not has_cise:
+                to_delete.append(all_ids[i])
+        if to_delete:
+            for i in range(0, len(to_delete), 1000):
+                col.delete(ids=to_delete[i:i+1000])
+
+        total_count = col.count()
+
+        # Step 1: 如果数量极少（<5000），优先从 JSON 导入
         if total_count < 5000:
             try:
                 _import_from_json()

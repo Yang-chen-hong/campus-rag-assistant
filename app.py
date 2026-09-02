@@ -19,6 +19,7 @@ sys.path.append(os.path.dirname(__file__))
 from agent_graph import agent_invoke, reset_client
 from retriever import get_collection_count, reset_clients
 from init_db import init_database, ALL_DOCS
+import init_db
 from skills_tools import registry
 
 # ========== 页面配置 ==========
@@ -672,14 +673,14 @@ with st.sidebar:
     # 文档分类统计
     st.markdown("#### 📁 文档分类")
     categories = {
-        "学校概况": 3,
-        "学院介绍": 25,
-        "教务指南": 8,
-        "政策文档": 6,
-        "校园生活": 18,
-        "学生FAQ": 16,
-        "更多服务": 8,
-        "实用指南": 8,
+        "学校概况": len(init_db.SCHOOL_INTRO_DOCS),
+        "学院介绍": len(init_db.COLLEGE_DOCS),
+        "教务指南": len(init_db.ACADEMIC_GUIDE_DOCS),
+        "政策文档": len(init_db.POLICY_DOCS),
+        "校园生活": len(init_db.CAMPUS_LIFE_DOCS),
+        "学生FAQ": len(init_db.FAQ_DOCS),
+        "更多服务": len(init_db.MORE_SERVICES_DOCS),
+        "实用指南": len(init_db.STUDENT_GUIDE_DOCS),
     }
     max_count = max(categories.values())
     cat_colors = ["#5b9fff", "#a78bfa", "#4ade80", "#fbbf24",
@@ -782,7 +783,7 @@ with st.sidebar:
     show_sources = st.toggle("显示引用来源", value=True)
 
     st.divider()
-    st.caption("v4.0 · 统一Skill · 10工具 · 99文档")
+    st.caption(f"v4.0 · 统一Skill · 10工具 · {len(ALL_DOCS)}文档")
 
 
 # ========== 主界面 ==========
