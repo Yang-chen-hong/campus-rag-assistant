@@ -3226,7 +3226,7 @@ def init_database():
                         ids=[doc_id],
                         documents=[doc["content"]],
                         embeddings=[embedding],
-                        metadatas=[{"title": doc["title"], "source": doc.get("source", "bulk")}
+                        metadatas=[{"title": doc["title"], "source": doc.get("source", "bulk")}]
                     )
                 except Exception:
                     pass
