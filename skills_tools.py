@@ -1,5 +1,5 @@
 # ============================================================
-# 校园智能助手 - 统一 Skill 系统 v2.0
+# 信科学院智能助手 - 统一 Skill 系统 v2.0
 # ============================================================
 # 设计理念：一处定义，三处复用（Agent / MCP / LangChain）
 # 每个 Skill 真正查数据库，不硬编码
@@ -47,7 +47,7 @@ class Skill:
 class SearchKnowledgeBase(Skill):
     name = "search_knowledge_base"
     description = (
-        "搜索校园知识库。当用户询问任何校园相关问题时调用，"
+        "搜索信科学院知识库。当用户询问学院专业、课程、师资、政策等问题时调用，"
         "包括：奖学金、考试规定、处分、专业、宿舍、图书馆、食堂、学籍、毕业、学费、社团、军训、保研、"
         "教授/老师姓名、学院信息、校园设施等。"
         "查人名时直接输入全名搜索，如：蔡美玲、金龙。"
@@ -192,7 +192,7 @@ class QueryDiscipline(Skill):
 # ============================================================
 class GetCollegeInfo(Skill):
     name = "get_college_info"
-    description = "查询湖南师范大学各学院和专业信息，包括学院介绍、专业设置、师资力量等。"
+    description = "查询信科学院和专业信息，包括学院介绍、4个专业（计算机科学与技术、软件工程、物联网工程、人工智能）、师资力量、学科建设等。"
     parameters = {
         "type": "object",
         "properties": {
@@ -485,7 +485,7 @@ class GetDormitoryInfo(Skill):
 # ============================================================
 class CampusFAQMatch(Skill):
     name = "campus_faq_match"
-    description = "校园高频问题智能匹配。当用户问的是常见问题（如新生入学、校园卡、转专业、保研等），直接返回FAQ答案。"
+    description = "信科学院高频问题智能匹配。当用户问的是常见问题（如新生入学、校园卡、转专业、保研等），直接返回FAQ答案。"
     parameters = {
         "type": "object",
         "properties": {
@@ -617,7 +617,7 @@ def execute_skill(name: str, arguments: dict,
 # ============================================================
 if __name__ == "__main__":
     print("=" * 60)
-    print("校园智能助手 - Skill 系统 v2.0")
+    print("信科学院智能助手 - Skill 系统 v2.0")
     print("=" * 60)
     print(registry.summary())
 

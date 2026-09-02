@@ -1,5 +1,5 @@
 """
-湖南师范大学校园智能助手 - Streamlit 前端 v3.0
+湖南师范大学信科学院智能助手 - Streamlit 前端 v3.0
 ==================================================
 核心设计：
   1. 深色/明亮主题切换（运行时动态切换）
@@ -24,7 +24,7 @@ from skills_tools import registry
 
 # ========== 页面配置 ==========
 st.set_page_config(
-    page_title="湖南师范大学校园智能助手",
+    page_title="信科学院智能助手",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -620,8 +620,8 @@ else:
 # ========== 主题切换按钮 ==========
 col_title, col_theme = st.columns([8, 2])
 with col_title:
-    st.markdown('<div class="main-title">🎓 湖南师范大学校园智能助手</div>', unsafe_allow_html=True)
-    st.caption("ReAct Agent v4.0 · 10 Skills · 统一 Skill 系统")
+    st.markdown('<div class="main-title">🎓 信科学院智能助手</div>', unsafe_allow_html=True)
+    st.caption("湖南师范大学 · 信息科学与工程学院")
 with col_theme:
     theme_col1, theme_col2 = st.columns(2)
     with theme_col1:
@@ -640,8 +640,8 @@ with col_theme:
 
 # ========== 左侧数据面板 ==========
 with st.sidebar:
-    st.markdown("## 🎓 校园助手")
-    st.caption("湖南师范大学 · 智能问答系统")
+    st.markdown("## 🎓 信科助手")
+    st.caption("信息科学与工程学院 · 智能问答")
 
     st.divider()
 
@@ -798,10 +798,10 @@ if "last_result" not in st.session_state:
 if not st.session_state.messages:
     st.markdown("""
     <div class="welcome-card">
-        <h3>👋 你好！我是师大校园助手</h3>
+        <h3>👋 你好！我是信科学院智能助手</h3>
         <p style="color: var(--text-secondary); margin: 0.5rem 0;">
-            我可以帮你查询 <b>学校政策、专业介绍、奖学金评定、处分规定、学费住宿、社团活动</b> 等各类校园信息。<br/>
-            现在配备 <b>10个Skill工具</b>，支持知识检索、GPA计算、奖学金判断、毕业检查等功能。
+            我可以帮你查询 <b>信科学院专业介绍、师资队伍、课程信息、奖学金评定、保研条件、就业方向</b> 等。<br/>
+            也支持 <b>GPA计算、毕业检查、学费查询</b> 等实用功能。
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -809,10 +809,10 @@ if not st.session_state.messages:
     # 快捷提问
     col1, col2, col3, col4 = st.columns(4)
     quick_questions = [
-        "奖学金评定条件是什么？",
-        "学费多少钱？",
-        "入党流程是什么？",
+        "信科学院有哪些专业？",
         "保研需要什么条件？",
+        "计算机科学与技术专业课程有哪些？",
+        "学院师资力量怎么样？",
     ]
     cols = [col1, col2, col3, col4]
     for i, (col, q) in enumerate(zip(cols, quick_questions)):
